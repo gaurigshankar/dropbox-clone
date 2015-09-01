@@ -1,3 +1,3 @@
 # dropbox-clone
 
-![](dropbox-submissiongifs/submission.gif)
+![](https://raw.githubusercontent.com/gaurigshankar/dropbox-clone/master/dropbox-submissiongifs/GET-cwd.gif)
