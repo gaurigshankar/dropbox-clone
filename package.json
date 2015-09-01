@@ -6,6 +6,7 @@
     "client": "nodemon --exec babel-node -- --stage 1 --optional strict -- tcpclient.js"
   },
   "dependencies": {
+    "archiver": "^0.15.0",
     "bluebird": "^2.9.34",
     "bluebird-nodeify": "^1.0.0",
     "express": "^4.13.3",

@@ -15,6 +15,7 @@ let chokidar = require('chokidar')
 let {isDirectory,getTCPClientPayload} = require('./VFSOperations')
 let tar = require("tar")
 let fstream = require("fstream")
+let archiver = require('archiver')
 
 
 
@@ -37,12 +38,16 @@ app.listen(PORT, () =>
 
 app.get('/dropbox-clone.tar',(req,res,next) => {
     let tarFileLocationInServer = path.join(ROOT_DIR,'../../',req.url)
-    console.log("Request for Tar file Recieved ::: "+tarFileLocationInServer)
-    res.download(tarFileLocationInServer)
+    let archive = archiver('tar')
+    archive.pipe(res);
+    archive.bulk([
+        { expand: true, cwd: ROOT_DIR, src: ['**'], dest: 'source'}
+    ])
+    archive.finalize()
+
 })
 
 app.get('*' , setFileMeta , sendHeaders ,(req,res) => {
-    console.log("wild get ::: "+req.url)
     if(res.body){
         res.json(res.body)
         return
@@ -68,7 +73,6 @@ app.delete('*',setFileMeta ,(req,res,next) => {
 
         if(tcpSocket){
             let type =  req.stat && req.stat.isDirectory() ? 'dir': 'file'
-            console.log("File type in express delte  "+type)
             let payload = getTCPClientPayload("delete",req.url,type)
             tcpSocket.send('delete', payload);
         }
@@ -162,26 +166,13 @@ function setFileMeta(req,res,next) {
 }
 
 
-let  tcpport = 9838;
+let tcpport = 9838;
 let tcpSocket;
 let server = nssocket.createServer(function (socket){
     tcpSocket = socket;
     let tarFileDest =path.join(ROOT_DIR,'..','/dropbox-clone.tar')
-    console.log("tarFileName ::: "+tarFileDest)
 
-    let packer = tar.Pack({ noProprietary: true })
-        .on('error', onError)
-
-
-// This must be a "directory"
-    fstream.Reader({ path: ROOT_DIR, type: "Directory" })
-        .on('error',onError)
-        .pipe(packer)
-        .pipe( fs.createWriteStream(tarFileDest))
-
-   //tar.pack(ROOT_DIR).pipe(fs.createWriteStream(tarFileName))
     let payload = getTCPClientPayload("create",'/dropbox-clone.tar','file')
-   // fs.createReadStream(tarFileName).pipe(tar.extract(path.join(ROOT_DIR,'//my-other-directory')))
     socket.send('originalFileSystem',payload)
 }).listen(tcpport);
 
@@ -191,7 +182,5 @@ function onError(err) {
 
 
 
-
-   // .unwatch(ROOT_DIR+'/submissionGifs/')
 
 

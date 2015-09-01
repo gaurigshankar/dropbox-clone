@@ -12,17 +12,16 @@ let fs = require ('pn/fs')
 let rimraf = require('rimraf')
 let nodeify = require('bluebird-nodeify')
 let tarStream = require('tar-stream')
-
+let chokidar = require('chokidar')
+let tar = require('tar')
 
 
 
 const ROOT_DIR = argv.dir || path.resolve(process.cwd())
 console.log("ROOT DIR for Client :: "  +ROOT_DIR)
 
-let options = {
-    url: 'https://127.0.0.1:8777/',
-    headers: {'Accept': 'application/x-gtar'}
-}
+let HTTP_SERVER = 'http://127.0.0.1:8777'
+
 
 var httpoptions = {
     host: 'localhost',
@@ -48,8 +47,6 @@ tcpClient.data('create', (payload) => {
     console.log((payload))
 })
 tcpClient.data('update', (payload) => {
-    console.log("****************************************")
-
     handlePayload(payload).catch(e => console.log);
     console.log((payload))
 })
@@ -58,47 +55,16 @@ tcpClient.data('delete', (payload) => {
     console.log((payload))
 })
 tcpClient.data('originalFileSystem', (payload) => {
-    console.log('originalFileSystem ::: '+JSON.stringify(payload) )
-    let filePath = path.resolve(path.join(ROOT_DIR,payload.path))
-    console.log("filePath :: "+filePath)
-
-    downloadAndUntar(payload)
+     let options = {
+        url:HTTP_SERVER,
+        uri:HTTP_SERVER+payload.path,
+        headers: {'Accept': 'application/x-gtar'}
+    }
+    let extract = tar.Extract({path: ROOT_DIR})
+    request(options, HTTP_SERVER+payload.path).pipe(extract)
 })
 
-async function downloadAndUntar(payload){
-    let filePath = path.resolve(path.join(ROOT_DIR,payload.path))
-    let data = await getFileContentAndWriteToFile(payload.path,filePath)
-    console.log("done with download")
-    let tarExtractLocation = path.join(ROOT_DIR,"/extract")
-    let tarLocation = path.join(ROOT_DIR,"/dropbox-clone-original.tar")
-    console.log(" tarExtractLocation in client ::"+tarExtractLocation)
-    console.log("tarfileLocation   ::: "+tarLocation)
-     let fstream = await fs.createReadStream(tarLocation);
 
-    fstream.on('error', console.log)
-    .pipe(tar.Extract({path: 'out',type:"Directory"}));
-
-    console.log("***********************************************")
-    //let extractor = tar.Extract({path: tarExtractLocation,strip: 0})
-    console.log("***********************************************")
-
-    console.log("tarLocation  "+tarLocation)
-
-    // Optionally, wrap stream logic in a Promise to resolve on stream completion
-    return await Promise((resolve, reject) => {
-        fs.createReadStream(tarLocation)
-            .on('error', reject)
-            .pipe(extractor).on('end', resolve)
-    })
-
-    //fs.createReadStream(tarLocation)
-    //    .on('error', onError)
-    //    .pipe(extractor)
-
-
-
-
-}
 
 async function handlePayload(payload){
 
@@ -128,76 +94,22 @@ async function handlePayload(payload){
 
 }
 
-//async function getFileContentAndWriteToFile(url,localfilepath){
-//
-//    httpoptions.path = url
-//    console.log("Get file content Called here  : "+JSON.stringify(httpoptions))
-//    await http.promise.get(httpoptions,function(response){
-//        response.on('data',function(data){
-//            console.log("##############################")
-//            fs.writeFile(localfilepath,data,function(err){
-//                console.log(err)
-//            })
-//
-//        });
-//
-//    })
-//
-//}
-
 async function getFileContentAndWriteToFile(url,localfilepath){
-    console.log(" in get tcall")
-    let fullUrl = "http://127.0.0.1:8777"+url
-    // Use the request-promise[1] package instead of http.get
-    let response = await request({url: fullUrl, resolveWithFullResponse: true})
-    // Use pn/fs instead of songbird's .promise.
-    await fs.writeFile(localfilepath,response.body)
-    console.log("Done writeing about to return with ")
-    return response.body
+
+    httpoptions.path = url
+    await http.promise.get(httpoptions,function(response){
+        response.on('data',function(data){
+            fs.writeFile(localfilepath,data,function(err){
+                console.log(err)
+            })
+
+        });
+
+    })
+
 }
 
 
 
-let watcher = chokidar.watch(ROOT_DIR,
-    {
-        ignored: /[\/\\]\./,
-        ignoreInitial: true,
-        persistent: true,
-        usePolling: true,
-        interval: 100,
-        atomic: true
-    })
-    .unwatch(ROOT_DIR+'/submissionGifs/')
-    .unwatch('submissionGifs*')
-    .on('addDir', (event, path) => {
-        let payload = getTCPClientPayload("write",event,"dir")
-        if(tcpSocket){
-             tcpSocket.send('addDir', payload);
-        }
 
-    })
-    .on('add', (event, path) => {
-        let payload = getTCPClientPayload("write",event,"file")
-        if(tcpSocket){
-             tcpSocket.send('addFile',payload);
-        }
 
-    })
-    .on('change', (event, path) => {
-        let payload = getTCPClientPayload("write",event,"file")
-        if(tcpSocket){
-            tcpSocket.send('changeFile',payload);
-        }
-    })
-    .on('unlink', (event, path) => {
-        let payload = getTCPClientPayload("delete",event,"file")
-        if(tcpSocket){
-             tcpSocket.send('deleteFile',payload);
-        }
-    })
-    .on('unlinkDir', (event, path) => {
-        let payload = getTCPClientPayload("delete",event,"dir")
-        if(tcpSocket){
-             tcpSocket.send('deleteDir',payload);
-        }
-    })
